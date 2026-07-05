@@ -594,12 +594,13 @@
   function renderSiteInfo(site) {
     var rows = [
       ["주소", site.address],
+      ["모니터링 PC", [site.monitor_location, site.monitor_pc_ip].filter(Boolean).join(" / ")],
       ["현장 담당자", [site.site_contact_name, site.site_contact_phone].filter(Boolean).join(" · ")],
-      ["담당자 이메일", site.site_contact_email],
-      ["모니터링 PC", [site.monitor_location, site.monitor_pc_ip].filter(Boolean).join(" / ")]
+      ["담당자 이메일", site.site_contact_email]
     ].filter(function (r) { return r[1]; });
+    el.siteInfo.classList.toggle("hidden", rows.length === 0);
     el.siteInfo.innerHTML = rows.map(function (r) {
-      return "<div><strong>" + esc(r[0]) + ":</strong> " + esc(r[1]) + "</div>";
+      return '<div class="site-info-item"><span class="site-info-label">' + esc(r[0]) + '</span><span class="site-info-value">' + esc(r[1]) + "</span></div>";
     }).join("");
   }
 
