@@ -53,6 +53,14 @@ create table sites (
   manager_name   text,
   note           text,
 
+  -- 참고용 표시 정보 (화면에서 직접 수정하지 않음, SQL로만 갱신)
+  address              text,  -- 사업장 주소
+  site_contact_name    text,  -- 현장 담당자명
+  site_contact_phone   text,  -- 현장 담당자 전화번호
+  site_contact_email   text,  -- 현장 담당자 이메일
+  monitor_location     text,  -- 모니터링 프로그램 설치 장소
+  monitor_pc_ip        text,  -- 모니터링 프로그램 설치 PC IP
+
   updated_by     text,
   updated_at     timestamptz default now(),
   created_at     timestamptz default now()

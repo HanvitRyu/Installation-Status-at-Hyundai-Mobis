@@ -21,9 +21,11 @@ sql/09_status_two_states.sql (과거 실행 이력용)
 sql/10_add_mac_address.sql (과거 실행 이력용)
 sql/11_assign_group_sites.sql (과거 실행 이력용)
 sql/12_reset_installer_assignment.sql (과거 실행 이력용)
-sql/13_site_group_assignment.sql  담당업체만 알고 설치업체는 미정인 상태를 표현하도록
-                                   sites.group_id 추가 + 59개 사업장 담당업체 배정
-                                   (지금 실행해야 할 최신 스크립트)
+sql/13_site_group_assignment.sql (과거 실행 이력용)
+sql/14_reset_site1_test_data.sql (과거 실행 이력용)
+sql/15_installer_names_final.sql (과거 실행 이력용)
+sql/16_site_contact_and_monitor_info.sql  사업장별 주소/현장담당자/모니터링 PC
+                                   설치정보 반영 (지금 실행해야 할 최신 스크립트)
 ```
 
 새 프로젝트를 처음부터 만든다면 `01_schema.sql` → `02_seed_placeholder.sql` →
@@ -96,6 +98,10 @@ update installers set name = '실제업체명' where name = '설치업체1';
 5. **담당업체만 먼저, 설치업체는 나중에 배정 가능** — 설치업체 6곳 선정이 끝나기
    전에도 사업장별로 담당업체(총괄)만 미리 표시해둘 수 있도록 `sites.group_id`를
    추가했습니다. 설치업체가 정해지면 그 설치업체 소속으로 자동 동기화됩니다.
+6. **사업장 참고 정보(주소/현장담당자/모니터링 PC) 추가** — "모비스 정보.pdf"에 있던
+   사업장 주소, 현장 담당자명·전화번호·이메일, 모니터링 프로그램 설치 장소·PC IP를
+   `sites` 테이블에 추가했습니다. 화면에서 직접 수정하는 항목은 아니고, 사업장 상세
+   화면 제목 바로 아래에 참고용으로만 표시됩니다 (값이 없으면 그 줄은 안 보임).
 
 ## 배포 절차 (신규 프로젝트 기준)
 
@@ -121,9 +127,8 @@ update installers set name = '실제업체명' where name = '설치업체1';
 
 ## 이미 Supabase를 세팅해두신 경우 (지금 상태)
 
-Supabase SQL Editor에서 `sql/13_site_group_assignment.sql` 하나만 실행하면 최신
-상태로 맞춰집니다 (담당업체만 먼저 배정 가능하도록 `sites.group_id` 추가 +
-59개 사업장 담당업체 배정: 링고벨 28 / 씨스콜CNS 31).
+Supabase SQL Editor에서 `sql/16_site_contact_and_monitor_info.sql` 하나만 실행하면
+최신 상태로 맞춰집니다 (사업장별 주소/현장담당자/모니터링 PC 설치정보 반영).
 
 ## 로컬에서 미리보기
 

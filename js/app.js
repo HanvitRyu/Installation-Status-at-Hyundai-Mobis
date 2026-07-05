@@ -71,6 +71,7 @@
     modal: document.getElementById("detail-modal"),
     modalClose: document.getElementById("modal-close"),
     detailTitle: document.getElementById("detail-title"),
+    siteInfo: document.getElementById("detail-site-info"),
     readonlyNotice: document.getElementById("detail-readonly-notice"),
     fGroup: document.getElementById("f-group"),
     fInstaller: document.getElementById("f-installer"),
@@ -589,6 +590,19 @@
     renderCRemovalUI();
   }
 
+  // 사업장 상세 상단의 참고용 정보(주소/현장담당자/모니터링 PC) — 읽기 전용, 값 없으면 줄 생략
+  function renderSiteInfo(site) {
+    var rows = [
+      ["주소", site.address],
+      ["현장 담당자", [site.site_contact_name, site.site_contact_phone].filter(Boolean).join(" · ")],
+      ["담당자 이메일", site.site_contact_email],
+      ["모니터링 PC", [site.monitor_location, site.monitor_pc_ip].filter(Boolean).join(" / ")]
+    ].filter(function (r) { return r[1]; });
+    el.siteInfo.innerHTML = rows.map(function (r) {
+      return "<div><strong>" + esc(r[0]) + ":</strong> " + esc(r[1]) + "</div>";
+    }).join("");
+  }
+
   // ---------- detail modal ----------
   function openDetail(siteId) {
     var site = state.sites.find(function (s) { return s.id === siteId; });
@@ -598,6 +612,7 @@
     var editable = canEditSite(site);
 
     el.detailTitle.textContent = site.name;
+    renderSiteInfo(site);
     el.readonlyNotice.classList.toggle("hidden", editable);
 
     el.fGroup.innerHTML = '<option value="">미배정</option>' + state.groupsList.map(function (g) {
