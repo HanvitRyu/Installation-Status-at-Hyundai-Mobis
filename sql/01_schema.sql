@@ -48,7 +48,7 @@ create table sites (
   group_id       bigint references contractors(id),
 
   status         text default '미착수'
-                   check (status in ('미착수','완료')),
+                   check (status in ('미착수','설치예정','완료')),
   install_date   date,
   manager_name   text,
   note           text,
@@ -251,7 +251,8 @@ begin
 end; $$;
 
 -- 담당업체(총괄)만 배정 (설치업체 미정 상태에서 사용). 마스터 전용.
--- 이미 배정된 설치업체가 다른 담당업체 소속이면 설치업체 배정은 자동 해제된다.
+-- 이 함수는 "설치업체가 아직 정해지지 않은 상태"에서만 호출되므로, 호출되면
+-- 설치업체 배정은 항상 확실히 해제한다 (이전 설치업체가 남아있지 않도록).
 create or replace function assign_group(p_token text, p_site_id bigint, p_group_id bigint)
 returns void language plpgsql security definer as $$
 begin
@@ -260,13 +261,7 @@ begin
   end if;
   update sites set
     group_id = p_group_id,
-    installer_id = case
-      when p_group_id is null then null
-      when installer_id is not null
-        and (select group_id from installers where id = sites.installer_id) is distinct from p_group_id
-      then null
-      else installer_id
-    end,
+    installer_id = null,
     updated_by = who_is(p_token),
     updated_at = now()
   where id = p_site_id;

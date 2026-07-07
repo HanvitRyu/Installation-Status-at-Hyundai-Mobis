@@ -98,7 +98,9 @@
   }
 
   function statusBadgeClass(status) {
-    return status === "완료" ? "st-done" : "st-none";
+    if (status === "완료") return "st-done";
+    if (status === "설치예정") return "st-scheduled";
+    return "st-none";
   }
 
   function canEditSite(site) {
@@ -283,8 +285,11 @@
       ".cell .daynum{color:var(--text-muted);margin-bottom:4px;}" +
       ".cell.today .daynum{color:var(--accent);font-weight:700;}" +
       ".cell.empty{background:var(--page-plane);}" +
-      ".chip{display:block;font-size:11px;padding:2px 5px;border-radius:5px;margin-bottom:2px;background:rgba(137,135,129,0.14);color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
+      ".chip{display:block;font-size:11px;padding:2px 5px;border-radius:5px;margin-bottom:2px;background:rgba(137,135,129,0.14);color:var(--text-secondary);overflow:hidden;}" +
+      ".chip .chip-name{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
+      ".chip .chip-status{display:block;font-size:9px;opacity:0.8;}" +
       ".chip.done{background:rgba(12,163,12,0.14);color:var(--status-good);}" +
+      ".chip.scheduled{background:rgba(250,178,25,0.20);color:#c98500;}" +
       "</style></head><body>" +
       "<header><h1>" + esc(groupName) + " 설치 일정</h1></header>" +
       '<div class="nav"><button id="prev">◀</button><div class="label" id="label"></div><button id="next">▶</button></div>' +
@@ -324,8 +329,12 @@
       "    cell.appendChild(num);" +
       "    (byDate[dateStr] || []).forEach(function(ev){" +
       '      var chip = document.createElement("div");' +
-      '      chip.className = "chip" + (ev.status === "완료" ? " done" : "");' +
-      "      chip.textContent = ev.name;" +
+      '      var cls = ev.status === "완료" ? "done" : ev.status === "설치예정" ? "scheduled" : "none";' +
+      '      chip.className = "chip " + cls;' +
+      '      var nameEl = document.createElement("span"); nameEl.className = "chip-name"; nameEl.textContent = ev.name;' +
+      '      var statusEl = document.createElement("span"); statusEl.className = "chip-status"; statusEl.textContent = ev.status || "미착수";' +
+      "      chip.appendChild(nameEl);" +
+      "      chip.appendChild(statusEl);" +
       "      cell.appendChild(chip);" +
       "    });" +
       "    grid.appendChild(cell);" +

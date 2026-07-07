@@ -314,6 +314,8 @@ tbody tr:hover {
 }
 .status-badge.st-done { color: var(--status-good); background: rgba(12,163,12,0.12); }
 .status-badge.st-done::before { background: var(--status-good); }
+.status-badge.st-scheduled { color: var(--status-warning); background: rgba(201,133,0,0.14); }
+.status-badge.st-scheduled::before { background: var(--status-warning); }
 .status-badge.st-none { color: var(--status-neutral); background: rgba(137,135,129,0.14); }
 .status-badge.st-none::before { background: var(--status-neutral); }
 
