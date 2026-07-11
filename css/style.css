@@ -548,11 +548,16 @@ tbody tr:hover {
 }
 .unit-fields-narrow {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   margin-top: 6px;
 }
+.unit-fields-narrow label {
+  min-width: 0;
+}
 .unit-fields-narrow input {
+  width: 100%;
+  min-width: 0;
   padding: 6px 6px;
   font-size: 12px;
 }
