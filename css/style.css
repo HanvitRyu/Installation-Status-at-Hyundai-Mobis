@@ -620,8 +620,8 @@ tbody tr:hover {
   .toolbar #search-input { flex-basis: 100%; }
   .toolbar select { flex: 1 1 auto; min-width: 0; }
 
-  .modal { padding: 0; align-items: stretch; }
-  .modal-content { max-width: none; min-height: 100%; border-radius: 0; padding: 16px; }
+  .modal { padding: 20px 8px; }
+  .modal-content { padding: 16px; }
 
   .detail-grid { grid-template-columns: 1fr; }
   .site-info { grid-template-columns: 1fr; }
