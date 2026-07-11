@@ -31,10 +31,12 @@
   };
 
   // 수량별 반복 입력 필드 정의. B는 위치만, C는 위치+네트워크 정보.
+  // fullWidth: true 인 필드(설치위치)는 카드 안에서 한 줄 전체를 차지하고,
+  // 나머지는 그 아래 2열로 배치된다.
   var UNIT_FIELDS = {
-    B: [{ key: "location", label: "설치위치" }],
+    B: [{ key: "location", label: "설치위치", fullWidth: true }],
     C: [
-      { key: "location", label: "설치위치" },
+      { key: "location", label: "설치위치", fullWidth: true },
       { key: "ip", label: "IP" },
       { key: "mac_address", label: "MAC주소", placeholder: "AA:BB:CC:DD:EE:FF" },
       { key: "gateway", label: "게이트웨이" },
@@ -495,21 +497,27 @@
     return map;
   }
 
-  // 필드가 여러 개인 품목(C)의 카드 하나를 만든다. removable=true면 값 입력은 잠기고
-  // 대신 "삭제" 체크박스가 붙는다 (실제수량이 예정수량보다 적을 때 고르는 용도).
+  // 필드 하나(카드) 안에서 fullWidth 필드는 자기 줄을 통째로 차지하고,
+  // 나머지 필드들은 그 아래 .unit-fields-narrow 안에 2열로 묶인다.
   function buildUnitGroupHtml(product, n, values, editable, removable) {
     var fields = UNIT_FIELDS[product];
-    var fieldsHtml = fields.map(function (f) {
+    var wideFields = fields.filter(function (f) { return f.fullWidth; });
+    var narrowFields = fields.filter(function (f) { return !f.fullWidth; });
+    var fieldToHtml = function (f) {
       var v = values[f.key] || "";
       return '<label>' + esc(f.label) + '<input type="text" data-field="' + f.key + '" placeholder="' + esc(f.placeholder || "") + '" value="' + esc(v) + '" ' + (editable && !removable ? "" : "disabled") + "></label>";
-    }).join("");
+    };
+    var wideHtml = wideFields.map(fieldToHtml).join("");
+    var narrowHtml = narrowFields.length
+      ? '<div class="unit-fields-narrow">' + narrowFields.map(fieldToHtml).join("") + "</div>"
+      : "";
     var removeToggle = removable
       ? '<label class="unit-remove-toggle"><input type="checkbox" class="unit-remove-checkbox" data-idx="' + (n - 1) + '"><span class="unit-remove-x">✕</span> 삭제</label>'
       : "";
     return (
       '<div class="network-unit-group' + (removable ? " removal" : "") + '" data-unit-no="' + n + '">' +
       '<div class="unit-label">' + esc(PRODUCT_INFO[product].label) + " " + n + "번째" + removeToggle + "</div>" +
-      '<div class="unit-fields">' + fieldsHtml + "</div></div>"
+      '<div class="unit-fields-wide">' + wideHtml + "</div>" + narrowHtml + "</div>"
     );
   }
 
@@ -526,24 +534,13 @@
       return;
     }
 
-    var compact = fields.length === 1; // 필드가 위치 하나뿐인 품목(B)은 칸을 작게 모아서 표시
     var html = "";
     for (var n = 1; n <= count; n++) {
       var dom = domValues[n] || {};
       var st = stateValues[n] || {};
-      if (compact) {
-        var onlyField = fields[0];
-        var onlyValue = dom[onlyField.key] !== undefined ? dom[onlyField.key] : (st[onlyField.key] || "");
-        html +=
-          '<div class="network-unit-group compact" data-unit-no="' + n + '">' +
-          '<span class="unit-no">' + n + '</span>' +
-          '<input type="text" data-field="' + onlyField.key + '" placeholder="' + esc(onlyField.label) + '" value="' + esc(onlyValue) + '" ' + (editable ? "" : "disabled") + ">" +
-          "</div>";
-      } else {
-        var merged = {};
-        fields.forEach(function (f) { merged[f.key] = dom[f.key] !== undefined ? dom[f.key] : (st[f.key] || ""); });
-        html += buildUnitGroupHtml(product, n, merged, editable, false);
-      }
+      var merged = {};
+      fields.forEach(function (f) { merged[f.key] = dom[f.key] !== undefined ? dom[f.key] : (st[f.key] || ""); });
+      html += buildUnitGroupHtml(product, n, merged, editable, false);
     }
     container.innerHTML = html;
   }

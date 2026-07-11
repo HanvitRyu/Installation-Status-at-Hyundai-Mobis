@@ -477,11 +477,7 @@ tbody tr:hover {
   color: var(--text-muted);
   margin: 0 0 10px;
 }
-#b-units-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
+#b-units-list,
 #c-units-list {
   display: flex;
   flex-direction: column;
@@ -491,25 +487,6 @@ tbody tr:hover {
   border: 1px solid var(--gridline);
   border-radius: var(--radius);
   padding: 10px 12px;
-}
-.network-unit-group.compact {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-}
-.network-unit-group.compact .unit-no {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-  min-width: 14px;
-  text-align: right;
-}
-.network-unit-group.compact input {
-  width: 120px;
-  max-width: 100%;
-  padding: 5px 7px;
-  font-size: 12px;
 }
 .network-unit-group .unit-label {
   font-size: 12px;
@@ -564,19 +541,18 @@ tbody tr:hover {
   border-radius: var(--radius);
   margin: 0 0 10px;
 }
-.network-unit-group .unit-fields {
-  display: grid;
-  /* 순서: 설치위치, IP, MAC주소, 게이트웨이, 서브넷마스크, 호스트IP */
-  grid-template-columns:
-    minmax(100px, 1.3fr)
-    minmax(56px, 0.8fr)
-    minmax(90px, 1.2fr)
-    minmax(56px, 0.8fr)
-    minmax(56px, 0.8fr)
-    minmax(56px, 0.8fr);
+.unit-fields-wide {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
 }
-.network-unit-group .unit-fields input {
+.unit-fields-narrow {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  margin-top: 6px;
+}
+.unit-fields-narrow input {
   padding: 6px 6px;
   font-size: 12px;
 }
@@ -625,12 +601,8 @@ tbody tr:hover {
 
   .detail-grid { grid-template-columns: 1fr; }
   .site-info { grid-template-columns: 1fr; }
-
-  .network-unit-group .unit-fields { grid-template-columns: 1fr 1fr; }
 }
 
-/* 실제 폰 화면(좁은 세로 폭): 모뎀(C) 수량별 입력칸은 IP/MAC를 편하게 칠 수 있게 1열로 */
 @media (max-width: 460px) {
-  .network-unit-group .unit-fields { grid-template-columns: 1fr; }
   .product-table input[type="number"] { width: 70px; }
 }
