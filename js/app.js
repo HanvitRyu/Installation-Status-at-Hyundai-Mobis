@@ -37,8 +37,8 @@
     B: [{ key: "location", label: "설치위치", fullWidth: true }],
     C: [
       { key: "location", label: "설치위치", fullWidth: true },
-      { key: "ip", label: "IP" },
       { key: "mac_address", label: "MAC주소", placeholder: "AA:BB:CC:DD:EE:FF" },
+      { key: "ip", label: "IP" },
       { key: "gateway", label: "게이트웨이" },
       { key: "subnet_mask", label: "서브넷마스크" },
       { key: "host_ip", label: "호스트IP" }

@@ -343,7 +343,7 @@ tbody tr:hover {
   border-radius: var(--radius);
   padding: 24px;
   width: 100%;
-  max-width: 760px;
+  max-width: 900px;
   position: relative;
   border: 1px solid var(--border);
 }
