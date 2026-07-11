@@ -141,8 +141,9 @@ main {
 
 .group-stat-metrics {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 18px;
+  gap: 10px 18px;
 }
 
 .calendar-btn {
@@ -425,8 +426,9 @@ tbody tr:hover {
 .product-table {
   margin-top: 8px;
 }
-.product-table input[type="number"] { width: 90px; }
-.product-table input[type="text"] { width: 130px; }
+.product-table td { white-space: normal; } /* 품목명이 좁은 화면에서 줄바꿈되도록 (nowrap 상속 방지) */
+.product-table input[type="number"] { width: 90px; max-width: 100%; }
+.product-table input[type="text"] { width: 130px; max-width: 100%; }
 .product-table td, .product-table th { padding: 8px; }
 
 .save-msg {
@@ -505,6 +507,7 @@ tbody tr:hover {
 }
 .network-unit-group.compact input {
   width: 120px;
+  max-width: 100%;
   padding: 5px 7px;
   font-size: 12px;
 }
@@ -514,6 +517,7 @@ tbody tr:hover {
   color: var(--text-secondary);
   margin-bottom: 8px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
 }
@@ -603,11 +607,30 @@ tbody tr:hover {
 }
 
 @media (max-width: 640px) {
+  main { padding: 12px 12px 40px; }
+  .topbar { padding: 12px 16px; }
+  .topbar h1 { font-size: 16px; }
+
+  .summary { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .stat-card { padding: 12px; }
+  .stat-card span { font-size: 22px; }
+  .group-summary { grid-template-columns: 1fr; }
+
+  .toolbar { gap: 6px; }
+  .toolbar #search-input { flex-basis: 100%; }
+  .toolbar select { flex: 1 1 auto; min-width: 0; }
+
+  .modal { padding: 0; align-items: stretch; }
+  .modal-content { max-width: none; min-height: 100%; border-radius: 0; padding: 16px; }
+
+  .detail-grid { grid-template-columns: 1fr; }
+  .site-info { grid-template-columns: 1fr; }
+
   .network-unit-group .unit-fields { grid-template-columns: 1fr 1fr; }
 }
 
-@media (max-width: 640px) {
-  .summary { grid-template-columns: repeat(2, 1fr); }
-  .detail-grid { grid-template-columns: 1fr; }
-  .site-info { grid-template-columns: 1fr; }
+/* 실제 폰 화면(좁은 세로 폭): 모뎀(C) 수량별 입력칸은 IP/MAC를 편하게 칠 수 있게 1열로 */
+@media (max-width: 460px) {
+  .network-unit-group .unit-fields { grid-template-columns: 1fr; }
+  .product-table input[type="number"] { width: 70px; }
 }
