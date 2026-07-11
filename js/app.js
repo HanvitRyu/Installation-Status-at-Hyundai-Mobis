@@ -240,6 +240,25 @@
   // 담당업체별 미니 통계도 검색/필터 선택과 무관하게 항상 전체 사업장 기준으로 고정한다.
   function renderGroupStats() {
     var list = state.sites;
+
+    // 설치업체 토큰으로 접속한 경우, 담당업체(총괄)명이 아니라 본인 설치업체명으로
+    // 카드 하나만 보여준다. (state.sites는 이미 본인 담당 사업장으로만 필터돼 있음)
+    if (!state.identity.isAdmin && state.identity.installerId != null) {
+      var total = list.length;
+      var done = list.filter(function (s) { return s.status === "완료"; }).length;
+      var pct = total ? Math.round((done / total) * 100) : 0;
+      el.groupStats.innerHTML =
+        '<div class="group-stat-card">' +
+        '<div class="group-stat-name">' + esc(state.identity.installerName) + "</div>" +
+        '<div class="group-stat-metrics">' +
+        '<div><strong>' + total + '</strong><span>담당 사업장</span></div>' +
+        '<div><strong>' + done + '</strong><span>완료</span></div>' +
+        '<div class="accent"><strong>' + pct + '%</strong><span>완료율</span></div>' +
+        '<button class="calendar-btn" data-group-id="' + state.identity.groupId + '" title="설치 일정 보기">📅 설치일정</button>' +
+        "</div></div>";
+      return;
+    }
+
     var byGroup = {};
     list.forEach(function (s) {
       var gid = getEffectiveGroupId(s);
