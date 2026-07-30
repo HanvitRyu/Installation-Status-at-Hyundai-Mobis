@@ -16,6 +16,7 @@
     installersById: {},        // installer_id -> { name, group_id, group_name }
     installersList: [],        // [{id,name,group_id,group_name}]
     groupsList: [],            // [{id,name}] (installersList에서 유도)
+    sitePhotosBySite: {},      // site_id -> [{id,site_id,photo_path,created_at}] (GST-502 등 기타 사진, 최대 5장)
     activeSiteId: null,
     activeEditable: false,
     installDateSort: null, // null | "asc" | "desc"
@@ -86,7 +87,10 @@
     cRemovalNotice: document.getElementById("c-removal-notice"),
     detailMeta: document.getElementById("detail-meta"),
     saveAllBtn: document.getElementById("save-all-btn"),
-    saveAllMsg: document.getElementById("save-all-msg")
+    saveAllMsg: document.getElementById("save-all-msg"),
+    sitePhotosList: document.getElementById("site-photos-list"),
+    unitPhotoFileInput: document.getElementById("unit-photo-file-input"),
+    sitePhotoFileInput: document.getElementById("site-photo-file-input")
   };
 
   var UNIT_LISTS = { B: el.bUnitsList, C: el.cUnitsList };
@@ -133,6 +137,58 @@
     return d.toLocaleString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
   }
 
+  // ---------- 설치사진 (Storage 업로드/조회 공용 헬퍼) ----------
+  var PHOTO_BUCKET = "installation-photos";
+
+  // 폰카메라 원본은 용량이 커서, 올리기 전에 최대 1600px/JPEG 80%로 줄인다.
+  function resizeImageFile(file, maxDim, quality) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      var objUrl = URL.createObjectURL(file);
+      img.onload = function () {
+        var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        var cw = Math.max(1, Math.round(img.width * scale));
+        var ch = Math.max(1, Math.round(img.height * scale));
+        var canvas = document.createElement("canvas");
+        canvas.width = cw;
+        canvas.height = ch;
+        canvas.getContext("2d").drawImage(img, 0, 0, cw, ch);
+        canvas.toBlob(function (blob) {
+          URL.revokeObjectURL(objUrl);
+          if (blob) resolve(blob); else reject(new Error("이미지 변환에 실패했습니다"));
+        }, "image/jpeg", quality || 0.8);
+      };
+      img.onerror = function () {
+        URL.revokeObjectURL(objUrl);
+        reject(new Error("이미지를 읽을 수 없습니다"));
+      };
+      img.src = objUrl;
+    });
+  }
+
+  // 비공개 버킷이라 <img src>로 바로 못 불러오고 다운로드해서 objectURL로 바꿔줘야 한다.
+  // 같은 경로는 세션 내에서 한 번만 받아오도록 캐시.
+  var photoUrlCache = {};
+  function getPhotoUrl(path) {
+    if (photoUrlCache[path]) return Promise.resolve(photoUrlCache[path]);
+    return supabase.storage.from(PHOTO_BUCKET).download(path).then(function (res) {
+      if (res.error || !res.data) return null;
+      var url = URL.createObjectURL(res.data);
+      photoUrlCache[path] = url;
+      return url;
+    }).catch(function () { return null; });
+  }
+
+  // container 안의 [data-photo-path] 요소들을 찾아 그 안의 <img>에 실제 사진을 채워준다.
+  function hydratePhotoThumbnails(container) {
+    container.querySelectorAll("[data-photo-path]").forEach(function (wrap) {
+      var path = wrap.getAttribute("data-photo-path");
+      var img = wrap.querySelector("img");
+      if (!path || !img || img.src) return;
+      getPhotoUrl(path).then(function (url) { if (url) img.src = url; });
+    });
+  }
+
   // ---------- load ----------
   // 조회는 전부 토큰 검증 RPC를 통해서만 이뤄진다 (get_sites/get_installations/get_installation_units).
   // 토큰이 없거나, 배정받은 설치업체/담당업체가 아니면 해당 사업장은 애초에 응답에 포함되지 않는다.
@@ -142,16 +198,24 @@
       supabase.rpc("get_installations", { p_token: token }),
       supabase.rpc("get_installation_units", { p_token: token }),
       supabase.rpc("list_installers", { p_token: token }),
-      supabase.rpc("identify", { p_token: token })
+      supabase.rpc("identify", { p_token: token }),
+      supabase.rpc("get_site_photos", { p_token: token })
     ]);
 
-    var sitesRes = results[0], instRes = results[1], unitsRes = results[2], installersRes = results[3], identifyRes = results[4];
+    var sitesRes = results[0], instRes = results[1], unitsRes = results[2], installersRes = results[3], identifyRes = results[4], sitePhotosRes = results[5];
 
     if (sitesRes.error) throw sitesRes.error;
     if (instRes.error) throw instRes.error;
     if (unitsRes.error) throw unitsRes.error;
     if (installersRes.error) throw installersRes.error;
     if (identifyRes.error) throw identifyRes.error;
+    if (sitePhotosRes.error) throw sitePhotosRes.error;
+
+    state.sitePhotosBySite = {};
+    (sitePhotosRes.data || []).forEach(function (row) {
+      if (!state.sitePhotosBySite[row.site_id]) state.sitePhotosBySite[row.site_id] = [];
+      state.sitePhotosBySite[row.site_id].push(row);
+    });
 
     state.sites = (sitesRes.data || []).slice().sort(function (a, b) { return a.id - b.id; });
 
@@ -511,6 +575,8 @@
       fields.forEach(function (f) {
         vals[f.key] = g.querySelector('[data-field="' + f.key + '"]').value;
       });
+      var photoEl = g.querySelector(".unit-photo[data-photo-path]");
+      vals.photo_path = photoEl ? photoEl.getAttribute("data-photo-path") : null;
       map[n] = vals;
     });
     return map;
@@ -533,9 +599,21 @@
     var removeToggle = removable
       ? '<label class="unit-remove-toggle"><input type="checkbox" class="unit-remove-checkbox" data-idx="' + (n - 1) + '"><span class="unit-remove-x">✕</span> 삭제</label>'
       : "";
+    var photoHtml = "";
+    if (!removable) {
+      if (values.photo_path) {
+        photoHtml =
+          '<span class="unit-photo" data-photo-path="' + esc(values.photo_path) + '">' +
+          '<img class="unit-photo-thumb" alt="설치사진">' +
+          (editable ? '<button type="button" class="unit-photo-btn unit-photo-replace" data-product="' + product + '" data-unit-no="' + n + '">교체</button>' : "") +
+          "</span>";
+      } else if (editable) {
+        photoHtml = '<button type="button" class="unit-photo-btn unit-photo-add" data-product="' + product + '" data-unit-no="' + n + '">📷 설치사진</button>';
+      }
+    }
     return (
       '<div class="network-unit-group' + (removable ? " removal" : "") + '" data-unit-no="' + n + '">' +
-      '<div class="unit-label">' + esc(PRODUCT_INFO[product].label) + " " + n + "번째" + removeToggle + "</div>" +
+      '<div class="unit-label">' + esc(PRODUCT_INFO[product].label) + " " + n + "번째" + photoHtml + removeToggle + "</div>" +
       '<div class="unit-fields-wide">' + wideHtml + "</div>" + narrowHtml + "</div>"
     );
   }
@@ -559,9 +637,42 @@
       var st = stateValues[n] || {};
       var merged = {};
       fields.forEach(function (f) { merged[f.key] = dom[f.key] !== undefined ? dom[f.key] : (st[f.key] || ""); });
+      merged.photo_path = st.photo_path || null;
       html += buildUnitGroupHtml(product, n, merged, editable, false);
     }
     container.innerHTML = html;
+    hydratePhotoThumbnails(container);
+  }
+
+  // 유닛 사진 업로드 후, 해당 유닛 카드만 다시 그려서 썸네일을 반영한다.
+  // (현재 dom에 입력 중인 다른 필드 값들은 getUnitFieldsFromDom을 통해 그대로 유지됨)
+  function refreshUnitPhotoDisplay(product) {
+    var container = UNIT_LISTS[product];
+    var count = container.querySelectorAll(".network-unit-group").length;
+    renderUnits(product, state.activeSiteId, count, state.activeEditable);
+  }
+
+  // 유닛 사진 1장 업로드(교체 포함). 업로드 전 리사이즈하고, Storage 업로드 후 photo_path를 저장한다.
+  function uploadUnitPhoto(product, unitNo, file) {
+    var siteId = state.activeSiteId;
+    var path = token + "/" + siteId + "/" + product + "-" + unitNo + ".jpg";
+    return resizeImageFile(file, 1600, 0.82).then(function (blob) {
+      return supabase.storage.from(PHOTO_BUCKET).upload(path, blob, { upsert: true, contentType: "image/jpeg" });
+    }).then(function (res) {
+      if (res.error) throw res.error;
+      delete photoUrlCache[path]; // 교체된 사진이면 캐시된 이전 썸네일을 버린다
+      return supabase.rpc("save_unit_photo", { p_token: token, p_site_id: siteId, p_product: product, p_unit_no: unitNo, p_photo_path: path });
+    }).then(function (res) {
+      if (res.error) throw res.error;
+      var list = state.unitsBysite[siteId] && state.unitsBysite[siteId][product];
+      if (!list) {
+        state.unitsBysite[siteId] = state.unitsBysite[siteId] || { B: [], C: [] };
+        list = state.unitsBysite[siteId][product] = [];
+      }
+      var existing = list.find(function (u) { return u.unit_no === unitNo; });
+      if (existing) existing.photo_path = path;
+      else list.push({ unit_no: unitNo, photo_path: path });
+    });
   }
 
   // ---------- 모뎀(C) 전용: 실제수량이 예정수량보다 적을 때 삭제할 항목 선택 ----------
@@ -584,6 +695,7 @@
     el.cUnitsList.innerHTML = finalUnits.length
       ? finalUnits.map(function (u, idx) { return buildUnitGroupHtml("C", idx + 1, u, state.activeEditable, false); }).join("")
       : '<p class="network-units-empty">GX-8200 TCP/IP 실제수량을 입력하면 그 대수만큼 입력란이 생성됩니다.</p>';
+    hydratePhotoThumbnails(el.cUnitsList);
     // 삭제 도중 다시 수량을 늘려 정리 없이 빠져나온 경우, 목표치만큼 칸을 마저 채워준다.
     if (target > finalUnits.length) {
       renderUnits("C", state.activeSiteId, target, state.activeEditable);
@@ -627,6 +739,68 @@
     el.siteInfo.innerHTML = rows.map(function (r) {
       return '<div class="site-info-item"><span class="site-info-label">' + esc(r[0]) + '</span><span class="site-info-value">' + esc(r[1]) + "</span></div>";
     }).join("");
+  }
+
+  // ---------- GST-502 등 기타 사진 (사업장 단위, 최대 5장) ----------
+  var MAX_SITE_PHOTOS = 5;
+
+  function renderSitePhotos(siteId, editable) {
+    var list = (state.sitePhotosBySite[siteId] || []).slice().sort(function (a, b) { return a.id - b.id; });
+    var itemsHtml = list.map(function (p) {
+      return (
+        '<div class="site-photo-item" data-photo-path="' + esc(p.photo_path) + '">' +
+        '<img class="site-photo-thumb" alt="사진">' +
+        (editable ? '<button type="button" class="site-photo-delete" data-photo-id="' + p.id + '" data-photo-path="' + esc(p.photo_path) + '" title="삭제">✕</button>' : "") +
+        "</div>"
+      );
+    }).join("");
+    var addHtml = (editable && list.length < MAX_SITE_PHOTOS)
+      ? '<button type="button" class="site-photo-add">+ 사진 추가</button>'
+      : "";
+    el.sitePhotosList.innerHTML =
+      (list.length || editable
+        ? '<div class="site-photos-grid">' + itemsHtml + addHtml + "</div>" +
+          '<p class="site-photos-count">' + list.length + " / " + MAX_SITE_PHOTOS + "장</p>"
+        : '<p class="network-units-empty">등록된 사진이 없습니다.</p>');
+    hydratePhotoThumbnails(el.sitePhotosList);
+  }
+
+  function addSitePhotoUpload(file) {
+    var siteId = state.activeSiteId;
+    var list = state.sitePhotosBySite[siteId] || [];
+    if (list.length >= MAX_SITE_PHOTOS) {
+      alert("사진은 최대 " + MAX_SITE_PHOTOS + "장까지 업로드할 수 있습니다.");
+      return;
+    }
+    var path = token + "/" + siteId + "/misc-" + Date.now() + ".jpg";
+    resizeImageFile(file, 1600, 0.82).then(function (blob) {
+      return supabase.storage.from(PHOTO_BUCKET).upload(path, blob, { contentType: "image/jpeg" });
+    }).then(function (res) {
+      if (res.error) throw res.error;
+      return supabase.rpc("add_site_photo", { p_token: token, p_site_id: siteId, p_photo_path: path });
+    }).then(function (res) {
+      if (res.error) throw res.error;
+      if (!state.sitePhotosBySite[siteId]) state.sitePhotosBySite[siteId] = [];
+      state.sitePhotosBySite[siteId].push({ id: res.data, site_id: siteId, photo_path: path });
+      renderSitePhotos(siteId, state.activeEditable);
+    }).catch(function (err) {
+      alert("사진 업로드에 실패했습니다: " + (err.message || err));
+    });
+  }
+
+  function deleteSitePhoto(photoId, path) {
+    if (!confirm("이 사진을 삭제할까요?")) return;
+    supabase.storage.from(PHOTO_BUCKET).remove([path]).then(function () {
+      return supabase.rpc("delete_site_photo", { p_token: token, p_photo_id: photoId });
+    }).then(function (res) {
+      if (res && res.error) throw res.error;
+      delete photoUrlCache[path];
+      var siteId = state.activeSiteId;
+      state.sitePhotosBySite[siteId] = (state.sitePhotosBySite[siteId] || []).filter(function (p) { return p.id !== photoId; });
+      renderSitePhotos(siteId, state.activeEditable);
+    }).catch(function (err) {
+      alert("사진 삭제에 실패했습니다: " + (err.message || err));
+    });
   }
 
   // ---------- detail modal ----------
@@ -698,6 +872,8 @@
     var cQty = cRow && cRow.actual_qty != null ? cRow.actual_qty : (cRow ? cRow.planned_qty || 0 : 0);
     cQty = Math.max(cQty, cExisting);
     renderUnits("C", siteId, cQty, editable);
+
+    renderSitePhotos(siteId, editable);
 
     el.detailMeta.textContent = site.updated_by
       ? "최종 수정: " + site.updated_by + " · " + formatDateTime(site.updated_at)
@@ -911,11 +1087,56 @@
     });
 
     el.modalClose.addEventListener("click", closeDetail);
-    el.modal.addEventListener("click", function (e) {
-      if (e.target === el.modal) closeDetail();
-    });
+    // 바깥(배경) 클릭으로는 닫히지 않게 한다 — 저장 안 하고 실수로 닫히는 걸 방지.
+    // X버튼 또는 ESC로만 닫힌다.
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape" && !el.modal.classList.contains("hidden")) closeDetail();
+    });
+
+    // ---------- 유닛(GX-8200/TCP-IP)별 설치사진 1장 ----------
+    var pendingUnitPhotoTarget = null; // {product, unitNo}
+    [el.bUnitsList, el.cUnitsList].forEach(function (list) {
+      list.addEventListener("click", function (e) {
+        var btn = e.target.closest(".unit-photo-add, .unit-photo-replace");
+        if (btn) {
+          pendingUnitPhotoTarget = { product: btn.getAttribute("data-product"), unitNo: parseInt(btn.getAttribute("data-unit-no"), 10) };
+          el.unitPhotoFileInput.value = "";
+          el.unitPhotoFileInput.click();
+          return;
+        }
+        var thumb = e.target.closest(".unit-photo-thumb");
+        if (thumb && thumb.getAttribute("src")) window.open(thumb.src, "_blank");
+      });
+    });
+    el.unitPhotoFileInput.addEventListener("change", function () {
+      var file = el.unitPhotoFileInput.files[0];
+      if (!file || !pendingUnitPhotoTarget) return;
+      var target = pendingUnitPhotoTarget;
+      pendingUnitPhotoTarget = null;
+      uploadUnitPhoto(target.product, target.unitNo, file)
+        .then(function () { refreshUnitPhotoDisplay(target.product); })
+        .catch(function (err) { alert("사진 업로드에 실패했습니다: " + (err.message || err)); });
+    });
+
+    // ---------- GST-502 등 기타 사진 (사업장 단위, 최대 5장) ----------
+    el.sitePhotosList.addEventListener("click", function (e) {
+      var delBtn = e.target.closest(".site-photo-delete");
+      if (delBtn) {
+        deleteSitePhoto(parseInt(delBtn.getAttribute("data-photo-id"), 10), delBtn.getAttribute("data-photo-path"));
+        return;
+      }
+      var addBtn = e.target.closest(".site-photo-add");
+      if (addBtn) {
+        el.sitePhotoFileInput.value = "";
+        el.sitePhotoFileInput.click();
+        return;
+      }
+      var thumb = e.target.closest(".site-photo-thumb");
+      if (thumb && thumb.getAttribute("src")) window.open(thumb.src, "_blank");
+    });
+    el.sitePhotoFileInput.addEventListener("change", function () {
+      var file = el.sitePhotoFileInput.files[0];
+      if (file) addSitePhotoUpload(file);
     });
 
     el.saveAllBtn.addEventListener("click", handleSaveAll);
