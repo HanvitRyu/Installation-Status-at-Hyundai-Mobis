@@ -89,7 +89,7 @@ main {
 /* stat cards */
 .summary {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px;
   margin-bottom: 12px;
 }
@@ -116,6 +116,16 @@ main {
 }
 
 .stat-card.accent span { color: var(--accent); }
+
+.stat-card-calendar {
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-family: inherit;
+}
+.stat-card-calendar span { font-size: 22px; }
+.stat-card-calendar:hover { background: rgba(42,120,214,0.06); }
 
 /* group breakdown (담당업체별 미니 통계) */
 .group-summary {

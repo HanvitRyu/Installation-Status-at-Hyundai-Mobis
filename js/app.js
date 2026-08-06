@@ -59,6 +59,7 @@
     statTotal: document.getElementById("stat-total"),
     statDone: document.getElementById("stat-done"),
     statPercent: document.getElementById("stat-percent"),
+    overallCalendarBtn: document.getElementById("overall-calendar-btn"),
     groupStats: document.getElementById("group-stats"),
     search: document.getElementById("search-input"),
     filterStatus: document.getElementById("filter-status"),
@@ -268,6 +269,7 @@
       badge.className = "identity-badge";
     }
     el.exportBtn.classList.toggle("hidden", !state.identity.isAdmin);
+    el.overallCalendarBtn.classList.toggle("hidden", !state.identity.isAdmin);
   }
 
   function renderFilterOptions() {
@@ -431,11 +433,14 @@
       "<\/script></body></html>";
   }
 
+  // groupId가 null이면 담당업체 구분 없이 접속 권한이 있는 전체 사업장 일정을 보여준다.
   function openScheduleWindow(groupId, groupName) {
     var events = state.sites
       .filter(function (s) {
+        if (!s.install_date) return false;
+        if (groupId == null) return true;
         var inst = state.installersById[s.installer_id];
-        return inst && inst.group_id === groupId && s.install_date;
+        return inst && inst.group_id === groupId;
       })
       .map(function (s) {
         return { name: s.name, date: s.install_date, status: s.status };
@@ -1052,6 +1057,10 @@
     el.filterGroup.addEventListener("change", renderTable);
     el.filterInstaller.addEventListener("change", renderTable);
     el.exportBtn.addEventListener("click", exportCSV);
+
+    el.overallCalendarBtn.addEventListener("click", function () {
+      openScheduleWindow(null, "전체 사업장");
+    });
 
     el.groupStats.addEventListener("click", function (e) {
       var btn = e.target.closest(".calendar-btn");
