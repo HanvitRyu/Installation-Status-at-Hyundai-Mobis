@@ -419,7 +419,7 @@
       '      var cls = ev.status === "완료" ? "done" : ev.status === "설치예정" ? "scheduled" : "none";' +
       '      chip.className = "chip " + cls;' +
       '      var nameEl = document.createElement("span"); nameEl.className = "chip-name"; nameEl.textContent = ev.name;' +
-      '      var statusEl = document.createElement("span"); statusEl.className = "chip-status"; statusEl.textContent = ev.status || "미착수";' +
+      '      var statusEl = document.createElement("span"); statusEl.className = "chip-status"; statusEl.textContent = (ev.status || "미착수") + (ev.installerName ? " (" + ev.installerName + ")" : "");' +
       "      chip.appendChild(nameEl);" +
       "      chip.appendChild(statusEl);" +
       "      cell.appendChild(chip);" +
@@ -443,7 +443,8 @@
         return inst && inst.group_id === groupId;
       })
       .map(function (s) {
-        return { name: s.name, date: s.install_date, status: s.status };
+        var inst = state.installersById[s.installer_id];
+        return { name: s.name, date: s.install_date, status: s.status, installerName: inst ? inst.name : null };
       });
 
     var win = window.open("", "_blank", "width=720,height=780");
