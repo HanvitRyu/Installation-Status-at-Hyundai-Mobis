@@ -20,8 +20,9 @@
     activeSiteId: null,
     activeEditable: false,
     installDateSort: null, // null | "asc" | "desc"
-    cRemoval: null // null | { target: number, units: [{location,ip,...}, ...] } — 모뎀(C) 실제수량이
+    cRemoval: null, // null | { target: number, units: [{location,ip,...}, ...] } — 모뎀(C) 실제수량이
                    // 예정수량보다 적을 때, 어떤 항목을 지울지 고르는 동안의 임시 상태
+    csvSelectedIds: null // Set<siteId> | null — 엑셀 내보내기 선택 모달이 열려있는 동안의 선택 상태
   };
 
   var PRODUCTS = ["A", "B", "C"];
@@ -91,7 +92,14 @@
     saveAllMsg: document.getElementById("save-all-msg"),
     sitePhotosList: document.getElementById("site-photos-list"),
     unitPhotoFileInput: document.getElementById("unit-photo-file-input"),
-    sitePhotoFileInput: document.getElementById("site-photo-file-input")
+    sitePhotoFileInput: document.getElementById("site-photo-file-input"),
+    csvModal: document.getElementById("csv-export-modal"),
+    csvModalClose: document.getElementById("csv-export-close"),
+    csvSelectAll: document.getElementById("csv-select-all"),
+    csvSelectAllCount: document.getElementById("csv-select-all-count"),
+    csvGroups: document.getElementById("csv-groups"),
+    csvPickedCount: document.getElementById("csv-picked-count"),
+    csvDownloadBtn: document.getElementById("csv-export-download-btn")
   };
 
   var UNIT_LISTS = { B: el.bUnitsList, C: el.cUnitsList };
@@ -1002,53 +1010,327 @@
     }
   }
 
-  // ---------- CSV export ----------
-  function formatUnitsText(units, product) {
-    var fields = UNIT_FIELDS[product];
-    return units.slice().sort(function (x, y) { return x.unit_no - y.unit_no; }).map(function (u) {
-      return u.unit_no + "번: " + fields.map(function (f) { return f.label + "=" + (u[f.key] || "-"); }).join(", ");
-    }).join(" / ");
+  // ---------- 사업장별 엑셀 내보내기 ----------
+  // "CSV 내보내기" 버튼(이름은 그대로 유지)을 누르면 사업장 선택 모달이 뜨고,
+  // 선택한 사업장들이 파일 하나 안에 사업장당 시트 1개로 담긴 .xlsx가 만들어진다.
+  // 담당업체별로 묶어서 고를 수 있지만, 실제 시트 내용에는 담당업체/설치업체 정보를 넣지 않는다
+  // (외주 업체 노출 방지 — 선택 화면은 관리자 본인만 보는 화면이라 그룹핑은 유지).
+
+  function openCsvExportModal() {
+    state.csvSelectedIds = new Set(state.sites.map(function (s) { return s.id; })); // 기본값: 전체 선택
+    renderCsvExportModal();
+    el.csvModal.classList.remove("hidden");
   }
 
-  function exportCSV() {
-    var header = ["담당업체", "사업장명", "설치업체", "상태", "설치일", "담당자명", "비고",
-      "GST-502_예정", "GST-502_실제",
-      "GX-8200_예정", "GX-8200_실제", "GX-8200_상세정보",
-      "GX-8200 TCP/IP_예정", "GX-8200 TCP/IP_실제", "GX-8200 TCP/IP_상세정보",
-      "최종수정자", "최종수정시각"];
-    var rows = state.sites.map(function (s) {
-      var inst = state.installBysite[s.id] || {};
-      var a = inst.A || {}, b = inst.B || {}, c = inst.C || {};
-      var installer = state.installersById[s.installer_id];
-      var units = state.unitsBysite[s.id] || { B: [], C: [] };
-      return [
-        getEffectiveGroupName(s) || "", s.name, installer ? installer.name : "", s.status || "",
-        s.install_date || "", s.manager_name || "", s.note || "",
-        a.planned_qty ?? "", a.actual_qty ?? "",
-        b.planned_qty ?? "", b.actual_qty ?? "", formatUnitsText(units.B || [], "B"),
-        c.planned_qty ?? "", c.actual_qty ?? "", formatUnitsText(units.C || [], "C"),
-        s.updated_by || "", s.updated_at ? formatDateTime(s.updated_at) : ""
-      ];
+  function closeCsvExportModal() {
+    el.csvModal.classList.add("hidden");
+    state.csvSelectedIds = null;
+  }
+
+  function renderCsvExportModal() {
+    var byGroup = {}; // groupId(또는 "none") -> site[]
+    state.sites.forEach(function (s) {
+      var gid = getEffectiveGroupId(s);
+      var key = gid == null ? "none" : gid;
+      if (!byGroup[key]) byGroup[key] = [];
+      byGroup[key].push(s);
     });
 
-    var csvLines = [header].concat(rows).map(function (r) {
-      return r.map(function (v) {
-        var str = String(v ?? "");
-        if (/[",\n]/.test(str)) str = '"' + str.replace(/"/g, '""') + '"';
-        return str;
-      }).join(",");
+    var groupDefs = state.groupsList.map(function (g) {
+      return { key: String(g.id), name: g.name, sites: byGroup[g.id] || [] };
     });
-    var csv = "﻿" + csvLines.join("\r\n");
+    if (byGroup.none && byGroup.none.length) {
+      groupDefs.push({ key: "none", name: "미배정", sites: byGroup.none });
+    }
 
-    var blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    el.csvGroups.innerHTML = groupDefs.filter(function (g) { return g.sites.length; }).map(function (g) {
+      var rows = g.sites.map(function (s) {
+        return (
+          '<label class="csv-site-row">' +
+          '<input type="checkbox" class="csv-site-checkbox" data-site-id="' + s.id + '">' +
+          '<span class="csv-site-name">' + esc(s.name) + '</span>' +
+          '<span class="status-badge ' + statusBadgeClass(s.status) + '">' + esc(s.status || "미착수") + "</span>" +
+          "</label>"
+        );
+      }).join("");
+      return (
+        '<div class="csv-group" data-group-key="' + g.key + '">' +
+        '<div class="csv-group-head">' +
+        '<label><input type="checkbox" class="csv-group-checkbox" data-group-key="' + g.key + '"> ' + esc(g.name) + "</label>" +
+        '<span class="csv-count">' + g.sites.length + '개 중 <span class="csv-group-picked">0</span>개</span>' +
+        "</div>" +
+        '<div class="csv-site-grid">' + rows + "</div>" +
+        "</div>"
+      );
+    }).join("");
+
+    updateCsvExportUI();
+  }
+
+  // 선택 상태(state.csvSelectedIds)를 체크박스/카운트 표시에 반영. 그룹 체크박스는
+  // 그룹 내 선택 개수에 따라 checked/미체크/indeterminate(일부 선택) 3단계로 표시된다.
+  function updateCsvExportUI() {
+    var total = state.sites.length;
+    var pickedTotal = state.csvSelectedIds.size;
+    el.csvSelectAllCount.textContent = total + "개 중 " + pickedTotal + "개 선택됨";
+    el.csvSelectAll.checked = total > 0 && pickedTotal === total;
+    el.csvSelectAll.indeterminate = pickedTotal > 0 && pickedTotal < total;
+
+    el.csvGroups.querySelectorAll(".csv-group").forEach(function (groupEl) {
+      var checkboxes = groupEl.querySelectorAll(".csv-site-checkbox");
+      var pickedInGroup = 0;
+      checkboxes.forEach(function (cb) {
+        var siteId = parseInt(cb.getAttribute("data-site-id"), 10);
+        var on = state.csvSelectedIds.has(siteId);
+        cb.checked = on;
+        if (on) pickedInGroup++;
+      });
+      var groupCb = groupEl.querySelector(".csv-group-checkbox");
+      groupCb.checked = checkboxes.length > 0 && pickedInGroup === checkboxes.length;
+      groupCb.indeterminate = pickedInGroup > 0 && pickedInGroup < checkboxes.length;
+      var pickedLabel = groupEl.querySelector(".csv-group-picked");
+      if (pickedLabel) pickedLabel.textContent = pickedInGroup;
+    });
+
+    el.csvPickedCount.innerHTML = "선택된 사업장 <b>" + pickedTotal + "개</b> — 각 사업장이 시트 1개로 생성됩니다";
+    el.csvDownloadBtn.disabled = pickedTotal === 0;
+  }
+
+  function downloadBlob(blob, filename) {
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
     a.href = url;
-    a.download = "설치현황_" + new Date().toISOString().slice(0, 10) + ".csv";
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  // Storage에서 사진 원본을 받아 엑셀에 삽입할 수 있는 ArrayBuffer로 바꿔준다. 실패하면 null
+  // (썸네일 하나 실패했다고 전체 내보내기가 멈추지 않도록).
+  function getPhotoBuffer(path) {
+    return supabase.storage.from(PHOTO_BUCKET).download(path).then(function (res) {
+      if (res.error || !res.data) return null;
+      return res.data.arrayBuffer();
+    }).catch(function () { return null; });
+  }
+
+  // 엑셀 시트 이름 규칙(31자 제한, \/?*[]: 금지, 중복 불가)에 맞게 사업장명을 다듬는다.
+  function sanitizeSheetName(name, usedNames) {
+    var clean = (name || "사업장").replace(/[\\/?*[\]:]/g, " ").replace(/\s+/g, " ").trim();
+    if (!clean) clean = "사업장";
+    if (clean.length > 31) clean = clean.slice(0, 31);
+    var base = clean, n = 2;
+    while (usedNames[clean]) {
+      var suffix = "(" + n + ")";
+      clean = base.slice(0, 31 - suffix.length) + suffix;
+      n++;
+    }
+    usedNames[clean] = true;
+    return clean;
+  }
+
+  var XL = {
+    header: { argb: "FFEEF3FA" },
+    label: { argb: "FFF9F9F7" },
+    border: { argb: "FFE1E0D9" },
+    good: { argb: "FF0CA30C" },
+    warning: { argb: "FFC98500" },
+    neutral: { argb: "FF898781" },
+    white: { argb: "FFFFFFFF" }
+  };
+
+  function xlThinBorder() {
+    var side = { style: "thin", color: XL.border };
+    return { top: side, left: side, bottom: side, right: side };
+  }
+
+  var UNIT_COLS = 8; // 구분/사진/설치위치/MAC주소/IP/게이트웨이/서브넷마스크/호스트IP
+
+  // 사업장 하나를 워크시트 한 장으로 채운다. 담당업체/설치업체 정보는 넣지 않는다.
+  async function addSiteSheet(workbook, siteId, usedNames) {
+    var site = state.sites.find(function (s) { return s.id === siteId; });
+    if (!site) return;
+
+    var sheet = workbook.addWorksheet(sanitizeSheetName(site.name, usedNames));
+    sheet.columns = [
+      { width: 16 }, { width: 10 }, { width: 24 }, { width: 20 },
+      { width: 15 }, { width: 15 }, { width: 15 }, { width: 15 }
+    ];
+
+    var r = 1;
+
+    // 제목 + 상태
+    sheet.mergeCells(r, 1, r, 5);
+    var titleCell = sheet.getCell(r, 1);
+    titleCell.value = site.name;
+    titleCell.font = { bold: true, size: 16 };
+    var statusColor = site.status === "완료" ? XL.good : site.status === "설치예정" ? XL.warning : XL.neutral;
+    sheet.mergeCells(r, 6, r, UNIT_COLS);
+    var statusCell = sheet.getCell(r, 6);
+    statusCell.value = site.status || "미착수";
+    statusCell.font = { bold: true, color: XL.white };
+    statusCell.alignment = { horizontal: "center", vertical: "middle" };
+    statusCell.fill = { type: "pattern", pattern: "solid", fgColor: statusColor };
+    sheet.getRow(r).height = 26;
+    r += 2;
+
+    // 기본 정보 (라벨 | 값 형태로 한 줄씩)
+    var kvRows = [
+      ["주소", site.address],
+      ["설치일", site.install_date],
+      ["현장 담당자", [site.site_contact_name, site.site_contact_phone].filter(Boolean).join(" · ")],
+      ["담당자 이메일", site.site_contact_email],
+      ["모니터링 PC", [site.monitor_location, site.monitor_pc_ip].filter(Boolean).join(" / ")],
+      ["최종 수정", site.updated_by ? site.updated_by + " · " + formatDateTime(site.updated_at) : ""],
+      ["비고", site.note]
+    ];
+    kvRows.forEach(function (kv) {
+      var labelCell = sheet.getCell(r, 1);
+      labelCell.value = kv[0];
+      labelCell.font = { bold: true, color: { argb: "FF52514E" } };
+      labelCell.fill = { type: "pattern", pattern: "solid", fgColor: XL.label };
+      labelCell.border = xlThinBorder();
+      sheet.mergeCells(r, 2, r, UNIT_COLS);
+      var valueCell = sheet.getCell(r, 2);
+      valueCell.value = kv[1] || "-";
+      valueCell.border = xlThinBorder();
+      r++;
+    });
+    r++;
+
+    // 품목별 예정/실제 수량
+    var inst = state.installBysite[siteId] || {};
+    var headRow = sheet.getRow(r);
+    ["품목", "예정수량", "실제수량"].forEach(function (h, i) {
+      var c = headRow.getCell(i + 1);
+      c.value = h;
+      c.font = { bold: true, color: { argb: "FF52514E" } };
+      c.fill = { type: "pattern", pattern: "solid", fgColor: XL.header };
+      c.border = xlThinBorder();
+    });
+    r++;
+    PRODUCTS.forEach(function (p) {
+      var row = inst[p] || { planned_qty: 0, actual_qty: null };
+      var planned = row.planned_qty != null ? row.planned_qty : 0;
+      var actual = row.actual_qty;
+      var nameCell = sheet.getCell(r, 1); nameCell.value = PRODUCT_INFO[p].label; nameCell.border = xlThinBorder();
+      var plannedCell = sheet.getCell(r, 2); plannedCell.value = planned; plannedCell.alignment = { horizontal: "right" }; plannedCell.border = xlThinBorder();
+      var actualCell = sheet.getCell(r, 3);
+      actualCell.value = actual != null ? actual : "-";
+      actualCell.alignment = { horizontal: "right" };
+      actualCell.border = xlThinBorder();
+      if (actual != null) actualCell.font = { bold: true, color: actual >= planned ? XL.good : XL.warning };
+      r++;
+    });
+    r++;
+
+    // 유닛별 설치위치·네트워크 정보 (+사진)
+    var units = state.unitsBysite[siteId] || { B: [], C: [] };
+    var unitHeaders = ["구분", "사진", "설치위치", "MAC주소", "IP", "게이트웨이", "서브넷마스크", "호스트IP"];
+    var unitHeadRow = sheet.getRow(r);
+    unitHeaders.forEach(function (h, i) {
+      var c = unitHeadRow.getCell(i + 1);
+      c.value = h;
+      c.font = { bold: true, color: { argb: "FF52514E" } };
+      c.fill = { type: "pattern", pattern: "solid", fgColor: XL.header };
+      c.border = xlThinBorder();
+    });
+    r++;
+
+    var unitRows = [];
+    (units.B || []).slice().sort(function (a, b) { return a.unit_no - b.unit_no; }).forEach(function (u) {
+      unitRows.push({ label: "GX-8200 " + u.unit_no + "번째", location: u.location, photo_path: u.photo_path, network: false });
+    });
+    (units.C || []).slice().sort(function (a, b) { return a.unit_no - b.unit_no; }).forEach(function (u) {
+      unitRows.push({
+        label: "GX-8200 TCP/IP " + u.unit_no + "번째", location: u.location, photo_path: u.photo_path, network: true,
+        mac_address: u.mac_address, ip: u.ip, gateway: u.gateway, subnet_mask: u.subnet_mask, host_ip: u.host_ip
+      });
+    });
+
+    for (var ui = 0; ui < unitRows.length; ui++) {
+      var u = unitRows[ui];
+      sheet.getCell(r, 1).value = u.label;
+      sheet.getCell(r, 3).value = u.location || "-";
+      sheet.getCell(r, 4).value = u.network ? (u.mac_address || "-") : "-";
+      sheet.getCell(r, 5).value = u.network ? (u.ip || "-") : "-";
+      sheet.getCell(r, 6).value = u.network ? (u.gateway || "-") : "-";
+      sheet.getCell(r, 7).value = u.network ? (u.subnet_mask || "-") : "-";
+      sheet.getCell(r, 8).value = u.network ? (u.host_ip || "-") : "-";
+      for (var uc = 1; uc <= UNIT_COLS; uc++) sheet.getCell(r, uc).border = xlThinBorder();
+      sheet.getRow(r).height = 34;
+
+      if (u.photo_path) {
+        var buf = await getPhotoBuffer(u.photo_path);
+        if (buf) {
+          var imgId = workbook.addImage({ buffer: buf, extension: "jpeg" });
+          sheet.addImage(imgId, { tl: { col: 1.05, row: r - 1 + 0.08 }, ext: { width: 52, height: 39 } });
+        }
+      }
+      r++;
+    }
+    if (!unitRows.length) {
+      sheet.mergeCells(r, 1, r, UNIT_COLS);
+      var emptyCell = sheet.getCell(r, 1);
+      emptyCell.value = "등록된 설치위치 정보가 없습니다.";
+      emptyCell.font = { color: { argb: "FF898781" } };
+      r++;
+    }
+    r++;
+
+    // GST-502 등 기타 사진 (사업장 단위, 최대 5장)
+    var sitePhotos = (state.sitePhotosBySite[siteId] || []).slice().sort(function (a, b) { return a.id - b.id; });
+    sheet.mergeCells(r, 1, r, UNIT_COLS);
+    var photoHeadCell = sheet.getCell(r, 1);
+    photoHeadCell.value = "GST-502 등 기타 사진";
+    photoHeadCell.font = { bold: true, color: { argb: "FF52514E" } };
+    photoHeadCell.fill = { type: "pattern", pattern: "solid", fgColor: XL.header };
+    r++;
+
+    if (sitePhotos.length) {
+      var photoRow = r;
+      sheet.getRow(photoRow).height = 78;
+      for (var pi = 0; pi < sitePhotos.length; pi++) {
+        var pbuf = await getPhotoBuffer(sitePhotos[pi].photo_path);
+        if (!pbuf) continue;
+        var pImgId = workbook.addImage({ buffer: pbuf, extension: "jpeg" });
+        sheet.addImage(pImgId, { tl: { col: pi * 1.6 + 0.05, row: photoRow - 1 + 0.05 }, ext: { width: 96, height: 72 } });
+      }
+      r = photoRow + 1;
+    } else {
+      var noPhotoCell = sheet.getCell(r, 1);
+      noPhotoCell.value = "등록된 사진이 없습니다.";
+      noPhotoCell.font = { color: { argb: "FF898781" } };
+      r++;
+    }
+  }
+
+  async function runCsvExport() {
+    var siteIds = state.sites.map(function (s) { return s.id; })
+      .filter(function (id) { return state.csvSelectedIds && state.csvSelectedIds.has(id); });
+    if (!siteIds.length) return;
+
+    el.csvDownloadBtn.disabled = true;
+    try {
+      var workbook = new ExcelJS.Workbook();
+      var usedNames = {};
+      for (var i = 0; i < siteIds.length; i++) {
+        el.csvDownloadBtn.textContent = "엑셀 생성 중... (" + (i + 1) + "/" + siteIds.length + ")";
+        await addSiteSheet(workbook, siteIds[i], usedNames);
+      }
+      el.csvDownloadBtn.textContent = "파일 저장 중...";
+      var buffer = await workbook.xlsx.writeBuffer();
+      var blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      downloadBlob(blob, "설치현황_" + new Date().toISOString().slice(0, 10).replace(/-/g, "") + ".xlsx");
+      closeCsvExportModal();
+    } catch (err) {
+      alert("엑셀 생성에 실패했습니다: " + (err.message || err));
+    } finally {
+      el.csvDownloadBtn.disabled = false;
+      el.csvDownloadBtn.textContent = "엑셀 다운로드";
+    }
   }
 
   // ---------- events ----------
@@ -1057,7 +1339,33 @@
     el.filterStatus.addEventListener("change", renderTable);
     el.filterGroup.addEventListener("change", renderTable);
     el.filterInstaller.addEventListener("change", renderTable);
-    el.exportBtn.addEventListener("click", exportCSV);
+    el.exportBtn.addEventListener("click", openCsvExportModal);
+    el.csvModalClose.addEventListener("click", closeCsvExportModal);
+    el.csvModal.addEventListener("click", function (e) { if (e.target === el.csvModal) closeCsvExportModal(); });
+
+    el.csvSelectAll.addEventListener("change", function () {
+      if (el.csvSelectAll.checked) state.sites.forEach(function (s) { state.csvSelectedIds.add(s.id); });
+      else state.csvSelectedIds.clear();
+      updateCsvExportUI();
+    });
+
+    el.csvGroups.addEventListener("change", function (e) {
+      if (e.target.classList.contains("csv-group-checkbox")) {
+        var groupEl = e.target.closest(".csv-group");
+        var turnOn = e.target.checked;
+        groupEl.querySelectorAll(".csv-site-checkbox").forEach(function (cb) {
+          var siteId = parseInt(cb.getAttribute("data-site-id"), 10);
+          if (turnOn) state.csvSelectedIds.add(siteId); else state.csvSelectedIds.delete(siteId);
+        });
+        updateCsvExportUI();
+      } else if (e.target.classList.contains("csv-site-checkbox")) {
+        var siteId = parseInt(e.target.getAttribute("data-site-id"), 10);
+        if (e.target.checked) state.csvSelectedIds.add(siteId); else state.csvSelectedIds.delete(siteId);
+        updateCsvExportUI();
+      }
+    });
+
+    el.csvDownloadBtn.addEventListener("click", runCsvExport);
 
     el.overallCalendarBtn.addEventListener("click", function () {
       openScheduleWindow(null, "전체 사업장");

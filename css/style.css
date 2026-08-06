@@ -395,6 +395,80 @@ tbody tr:hover {
   margin: 10px 0;
 }
 
+/* 사업장별 엑셀 내보내기 - 선택 모달 */
+.csv-modal-content { max-width: 640px; }
+
+.csv-select-all-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  margin: 4px 0 14px;
+  background: rgba(42,120,214,0.08);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.csv-select-all-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.csv-count { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+.csv-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+.csv-group { border: 1px solid var(--gridline); border-radius: 6px; overflow: hidden; }
+.csv-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--page-plane);
+  border-bottom: 1px solid var(--gridline);
+}
+.csv-group-head label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
+
+.csv-site-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  background: var(--gridline);
+}
+.csv-site-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  background: var(--surface-1);
+  font-size: 13px;
+  cursor: pointer;
+}
+.csv-site-row .csv-site-name { flex: 1; }
+
+.csv-export-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--gridline);
+}
+.csv-export-footer .csv-picked { font-size: 12.5px; color: var(--text-secondary); }
+.csv-export-footer .csv-picked b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 640px) {
+  .csv-site-grid { grid-template-columns: 1fr; }
+}
+
 .detail-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
