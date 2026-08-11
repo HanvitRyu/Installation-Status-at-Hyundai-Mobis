@@ -395,8 +395,16 @@ tbody tr:hover {
   margin: 10px 0;
 }
 
-/* 사업장별 엑셀 내보내기 - 선택 모달 */
-.csv-modal-content { max-width: 640px; }
+/* 사업장별 엑셀 내보내기 - 선택 모달
+   제목/전체선택/하단 버튼은 고정되고, 사업장 목록(.csv-groups)만 내부 스크롤되도록
+   모달 자체를 세로 flex로 감싼다 (사업장이 많을 때 목록만 스크롤, 나머지는 항상 보임). */
+.csv-modal-content {
+  max-width: 640px;
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+}
+.csv-modal-content h2 { flex: 0 0 auto; }
 
 .csv-select-all-row {
   display: flex;
@@ -407,6 +415,7 @@ tbody tr:hover {
   background: rgba(42,120,214,0.08);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  flex: 0 0 auto;
 }
 .csv-select-all-row label {
   display: flex;
@@ -422,7 +431,8 @@ tbody tr:hover {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 46vh;
+  flex: 1 1 auto;
+  min-height: 0; /* flex 자식이 내용 크기만큼 계속 늘어나 스크롤이 안 먹는 문제 방지 */
   overflow-y: auto;
 }
 .csv-group { border: 1px solid var(--gridline); border-radius: 6px; overflow: hidden; }
@@ -461,6 +471,7 @@ tbody tr:hover {
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid var(--gridline);
+  flex: 0 0 auto;
 }
 .csv-export-footer .csv-picked { font-size: 12.5px; color: var(--text-secondary); }
 .csv-export-footer .csv-picked b { color: var(--text-primary); font-variant-numeric: tabular-nums; }

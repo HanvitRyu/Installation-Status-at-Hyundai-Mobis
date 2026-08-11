@@ -1148,16 +1148,31 @@
 
   var UNIT_COLS = 8; // 구분/사진/설치위치/MAC주소/IP/게이트웨이/서브넷마스크/호스트IP
 
+  // C열(설치위치)은 글자수가 긴 경우가 많아 70(≈560px)으로 넓게 잡는다. 나머지 컬럼은 기존 값 유지.
+  var COL_WIDTH_UNITS = [16, 10, 70, 20, 15, 15, 15, 15]; // A~H
+  var PX_PER_UNIT = 8; // "너비70 = 560px" 기준 환산치
+
+  // 사진(GST-502 등 기타사진) 배치는 셀 폭이 아니라 실제 픽셀 간격으로 계산해서,
+  // C열처럼 특정 컬럼만 넓어져도 사진들 간격이 어긋나지 않게 한다.
+  function pxToColAnchor(colWidthsPx, xPx) {
+    var acc = 0;
+    for (var i = 0; i < colWidthsPx.length; i++) {
+      if (xPx < acc + colWidthsPx[i] || i === colWidthsPx.length - 1) {
+        return i + Math.max(0, xPx - acc) / colWidthsPx[i];
+      }
+      acc += colWidthsPx[i];
+    }
+    return 0;
+  }
+
   // 사업장 하나를 워크시트 한 장으로 채운다. 담당업체/설치업체 정보는 넣지 않는다.
   async function addSiteSheet(workbook, siteId, usedNames) {
     var site = state.sites.find(function (s) { return s.id === siteId; });
     if (!site) return;
 
     var sheet = workbook.addWorksheet(sanitizeSheetName(site.name, usedNames));
-    sheet.columns = [
-      { width: 16 }, { width: 10 }, { width: 24 }, { width: 20 },
-      { width: 15 }, { width: 15 }, { width: 15 }, { width: 15 }
-    ];
+    sheet.columns = COL_WIDTH_UNITS.map(function (w) { return { width: w }; });
+    var colWidthsPx = COL_WIDTH_UNITS.map(function (w) { return w * PX_PER_UNIT; });
 
     var r = 1;
 
@@ -1200,12 +1215,13 @@
     });
     r++;
 
-    // 품목별 예정/실제 수량
+    // 품목별 예정/실제 수량 — C열(설치위치용으로 넓힌 컬럼)은 건너뛰고 D열에 실제수량을 배치해서
+    // 넓은 빈 셀 사이에 숫자가 붕 뜨는 걸 피한다.
     var inst = state.installBysite[siteId] || {};
     var headRow = sheet.getRow(r);
-    ["품목", "예정수량", "실제수량"].forEach(function (h, i) {
-      var c = headRow.getCell(i + 1);
-      c.value = h;
+    [[1, "품목"], [2, "예정수량"], [4, "실제수량"]].forEach(function (pair) {
+      var c = headRow.getCell(pair[0]);
+      c.value = pair[1];
       c.font = { bold: true, color: { argb: "FF52514E" } };
       c.fill = { type: "pattern", pattern: "solid", fgColor: XL.header };
       c.border = xlThinBorder();
@@ -1217,7 +1233,7 @@
       var actual = row.actual_qty;
       var nameCell = sheet.getCell(r, 1); nameCell.value = PRODUCT_INFO[p].label; nameCell.border = xlThinBorder();
       var plannedCell = sheet.getCell(r, 2); plannedCell.value = planned; plannedCell.alignment = { horizontal: "right" }; plannedCell.border = xlThinBorder();
-      var actualCell = sheet.getCell(r, 3);
+      var actualCell = sheet.getCell(r, 4);
       actualCell.value = actual != null ? actual : "-";
       actualCell.alignment = { horizontal: "right" };
       actualCell.border = xlThinBorder();
@@ -1292,11 +1308,16 @@
     if (sitePhotos.length) {
       var photoRow = r;
       sheet.getRow(photoRow).height = 78;
+      var MISC_PHOTO_W = 96, MISC_PHOTO_GAP = 14, MISC_PHOTO_START_X = 6;
       for (var pi = 0; pi < sitePhotos.length; pi++) {
         var pbuf = await getPhotoBuffer(sitePhotos[pi].photo_path);
         if (!pbuf) continue;
         var pImgId = workbook.addImage({ buffer: pbuf, extension: "jpeg" });
-        sheet.addImage(pImgId, { tl: { col: pi * 1.6 + 0.05, row: photoRow - 1 + 0.05 }, ext: { width: 96, height: 72 } });
+        var xPx = MISC_PHOTO_START_X + pi * (MISC_PHOTO_W + MISC_PHOTO_GAP);
+        sheet.addImage(pImgId, {
+          tl: { col: pxToColAnchor(colWidthsPx, xPx), row: photoRow - 1 + 0.05 },
+          ext: { width: MISC_PHOTO_W, height: 72 }
+        });
       }
       r = photoRow + 1;
     } else {
