@@ -403,6 +403,7 @@
       "    if (window.opener && !window.opener.closed && window.opener.__openSiteDetailFromCalendar) {" +
       "      window.opener.__openSiteDetailFromCalendar(id);" +
       "      window.opener.focus();" +
+      "      window.blur();" + // 팝업 스스로 포커스를 놓아줘야 opener.focus()가 실제로 창을 맨 앞으로 올려주는 브라우저가 많음
       "      return;" +
       "    }" +
       "  } catch (e) {}" +
