@@ -401,6 +401,7 @@ tbody tr:hover {
 .csv-modal-content {
   max-width: 640px;
   max-height: calc(100vh - 80px);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -433,7 +434,9 @@ tbody tr:hover {
   gap: 10px;
   flex: 1 1 auto;
   min-height: 0; /* flex 자식이 내용 크기만큼 계속 늘어나 스크롤이 안 먹는 문제 방지 */
+  max-height: min(55vh, 480px); /* 부모 flex 계산과 별개로 이 목록 자체가 항상 스크롤되도록 직접 상한을 준다 */
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .csv-group { border: 1px solid var(--gridline); border-radius: 6px; overflow: hidden; }
 .csv-group-head {
