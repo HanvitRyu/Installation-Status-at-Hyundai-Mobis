@@ -394,16 +394,16 @@
       "<script>" +
       "var EVENTS = " + eventsJson + ";" +
       "var MAIN_URL = " + mainUrlJson + ";" +
-      // 메인 화면(이 달력창을 띄운 창)이 아직 열려 있으면 그 창에서 바로 상세 모달을 띄우고
-      // 그 창을 앞으로 가져온다. 이 달력 팝업은 그대로 열어둬서 이어서 다른 사업장도 바로
-      // 클릭해볼 수 있게 한다. 메인 화면이 닫혔거나 접근할 수 없으면 이 창 자체를 메인 화면
-      // 링크로 이동시킨다.
+      // 메인 화면(이 달력창을 띄운 창)이 아직 열려 있으면 그 창에서 바로 상세 모달을 띄운 뒤
+      // 이 달력 팝업은 닫는다 (포커스 이동만으로는 브라우저에 따라 메인 창이 팝업 뒤에 가려질
+      // 수 있어서, 팝업을 아예 닫아 확실하게 모달이 보이도록 함). 메인 화면이 닫혔거나 접근할
+      // 수 없으면 이 창 자체를 메인 화면 링크로 이동시킨다.
       "function openSite(id){" +
       "  try {" +
       "    if (window.opener && !window.opener.closed && window.opener.__openSiteDetailFromCalendar) {" +
       "      window.opener.__openSiteDetailFromCalendar(id);" +
       "      window.opener.focus();" +
-      "      window.blur();" + // 팝업 스스로 포커스를 놓아줘야 opener.focus()가 실제로 창을 맨 앞으로 올려주는 브라우저가 많음
+      "      window.close();" +
       "      return;" +
       "    }" +
       "  } catch (e) {}" +
