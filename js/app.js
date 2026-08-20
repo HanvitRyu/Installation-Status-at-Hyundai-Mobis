@@ -359,8 +359,9 @@
   }
 
   // ---------- 담당업체별 설치 일정 달력 (새 창) ----------
-  function buildScheduleHtml(groupName, events) {
+  function buildScheduleHtml(groupName, events, mainUrl) {
     var eventsJson = JSON.stringify(events).replace(/</g, "\\u003c");
+    var mainUrlJson = JSON.stringify(mainUrl);
     return "<!doctype html>" +
       '<html lang="ko"><head><meta charset="UTF-8">' +
       "<title>" + esc(groupName) + " 설치 일정</title>" +
@@ -380,7 +381,8 @@
       ".cell .daynum{color:var(--text-muted);margin-bottom:4px;}" +
       ".cell.today .daynum{color:var(--accent);font-weight:700;}" +
       ".cell.empty{background:var(--page-plane);}" +
-      ".chip{display:block;font-size:11px;padding:2px 5px;border-radius:5px;margin-bottom:2px;background:rgba(137,135,129,0.14);color:var(--text-secondary);overflow:hidden;}" +
+      ".chip{display:block;width:100%;text-align:left;border:none;font-size:11px;padding:2px 5px;border-radius:5px;margin-bottom:2px;background:rgba(137,135,129,0.14);color:var(--text-secondary);overflow:hidden;cursor:pointer;font-family:inherit;}" +
+      ".chip:hover{filter:brightness(0.94);}" +
       ".chip .chip-name{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
       ".chip .chip-status{display:block;font-size:9px;opacity:0.8;}" +
       ".chip.done{background:rgba(12,163,12,0.14);color:var(--status-good);}" +
@@ -391,6 +393,21 @@
       '<div class="grid" id="grid"></div>' +
       "<script>" +
       "var EVENTS = " + eventsJson + ";" +
+      "var MAIN_URL = " + mainUrlJson + ";" +
+      // 메인 화면(이 달력창을 띄운 창)이 아직 열려 있으면 그 창에서 바로 상세 모달을 띄우고
+      // 그 창을 앞으로 가져온 뒤, 이 달력 팝업은 닫아서 창이 여러 개 겹쳐 보이지 않게 한다.
+      // 메인 화면이 닫혔거나 접근할 수 없으면(다른 출처 등) 이 창 자체를 메인 화면 링크로 이동시킨다.
+      "function openSite(id){" +
+      "  try {" +
+      "    if (window.opener && !window.opener.closed && window.opener.__openSiteDetailFromCalendar) {" +
+      "      window.opener.__openSiteDetailFromCalendar(id);" +
+      "      window.opener.focus();" +
+      "      window.close();" +
+      "      return;" +
+      "    }" +
+      "  } catch (e) {}" +
+      '  window.location.href = MAIN_URL + "#site-" + id;' +
+      "}" +
       "var byDate = {};" +
       "EVENTS.forEach(function(e){ if(!byDate[e.date]) byDate[e.date]=[]; byDate[e.date].push(e); });" +
       "function pickInitialMonth(){" +
@@ -423,9 +440,12 @@
       '    var num = document.createElement("div"); num.className = "daynum"; num.textContent = d;' +
       "    cell.appendChild(num);" +
       "    (byDate[dateStr] || []).forEach(function(ev){" +
-      '      var chip = document.createElement("div");' +
+      '      var chip = document.createElement("button");' +
+      '      chip.type = "button";' +
       '      var cls = ev.status === "완료" ? "done" : ev.status === "설치예정" ? "scheduled" : "none";' +
       '      chip.className = "chip " + cls;' +
+      '      chip.title = ev.name + " 상세보기";' +
+      '      chip.addEventListener("click", function(){ openSite(ev.id); });' +
       '      var nameEl = document.createElement("span"); nameEl.className = "chip-name"; nameEl.textContent = ev.name;' +
       '      var statusEl = document.createElement("span"); statusEl.className = "chip-status"; statusEl.textContent = (ev.status || "미착수") + (ev.installerName ? " (" + ev.installerName + ")" : "");' +
       "      chip.appendChild(nameEl);" +
@@ -452,7 +472,7 @@
       })
       .map(function (s) {
         var inst = state.installersById[s.installer_id];
-        return { name: s.name, date: s.install_date, status: s.status, installerName: inst ? inst.name : null };
+        return { id: s.id, name: s.name, date: s.install_date, status: s.status, installerName: inst ? inst.name : null };
       });
 
     var win = window.open("", "_blank", "width=720,height=780");
@@ -460,7 +480,8 @@
       alert("팝업이 차단되었습니다. 브라우저의 팝업 차단을 해제한 뒤 다시 시도해주세요.");
       return;
     }
-    win.document.write(buildScheduleHtml(groupName, events));
+    var mainUrl = window.location.href.split("#")[0];
+    win.document.write(buildScheduleHtml(groupName, events, mainUrl));
     win.document.close();
   }
 
@@ -896,6 +917,10 @@
     el.modal.classList.remove("hidden");
     if (history.replaceState) history.replaceState(null, "", window.location.pathname + window.location.search + "#site-" + siteId);
   }
+
+  // 설치일정 달력(별도 팝업 창)에서 사업장을 클릭했을 때, 그 팝업이 window.opener를 통해
+  // 이 창의 상세 모달을 바로 띄울 수 있도록 열어둔 통로.
+  window.__openSiteDetailFromCalendar = openDetail;
 
   function closeDetail() {
     el.modal.classList.add("hidden");
