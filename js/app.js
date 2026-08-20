@@ -395,14 +395,14 @@
       "var EVENTS = " + eventsJson + ";" +
       "var MAIN_URL = " + mainUrlJson + ";" +
       // 메인 화면(이 달력창을 띄운 창)이 아직 열려 있으면 그 창에서 바로 상세 모달을 띄우고
-      // 그 창을 앞으로 가져온 뒤, 이 달력 팝업은 닫아서 창이 여러 개 겹쳐 보이지 않게 한다.
-      // 메인 화면이 닫혔거나 접근할 수 없으면(다른 출처 등) 이 창 자체를 메인 화면 링크로 이동시킨다.
+      // 그 창을 앞으로 가져온다. 이 달력 팝업은 그대로 열어둬서 이어서 다른 사업장도 바로
+      // 클릭해볼 수 있게 한다. 메인 화면이 닫혔거나 접근할 수 없으면 이 창 자체를 메인 화면
+      // 링크로 이동시킨다.
       "function openSite(id){" +
       "  try {" +
       "    if (window.opener && !window.opener.closed && window.opener.__openSiteDetailFromCalendar) {" +
       "      window.opener.__openSiteDetailFromCalendar(id);" +
       "      window.opener.focus();" +
-      "      window.close();" +
       "      return;" +
       "    }" +
       "  } catch (e) {}" +
